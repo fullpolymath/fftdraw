@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<body>
+<script>
+// --- 1. FUNÇÕES FFT QUE JÁ TEMOS (Baseadas em Cooley-Tukey) ---
+
+function fft(v) {
+    const n = v.length;
+    if (n <= 1) return v;
+    const pares = v.filter((_, i) => i % 2 === 0);
+    const impares = v.filter((_, i) => i % 2 !== 0);
+    const resP = fft(pares);
+    const resI = fft(impares);
+    let resultado = new Array(n);
+    for (let k = 0; k < n / 2; k++) {
+        const angle = -2 * Math.PI * k / n;
+        const twiddle = { re: Math.cos(angle), im: Math.sin(angle) };
+        const t = {
+            re: resI[k].re * twiddle.re - resI[k].im * twiddle.im,
+            im: resI[k].re * twiddle.im + resI[k].im * twiddle.re
+        };
+        resultado[k] = { re: resP[k].re + t.re, im: resP[k].im + t.im };
+        resultado[k + n / 2] = { re: resP[k].re - t.re, im: resP[k].im - t.im };
+    }
+    return resultado;
+}
+
+// --- 2. PREPARAÇÃO DO DESENHO ---
+
+// Criando um desenho simples (um quadrado ou forma de "L")
+// Precisamos de uma potência de 2 para a nossa FFT (ex: 128 pontos)
+let N = 128;
+let sinalDesenho = [];
+for (let i = 0; i < N; i++) {
+    // Exemplo: Um círculo complexo com um pouco de ruído para ver a FFT trabalhando
+    let angulo = (i / N) * Math.PI * 2;
+    let r = 100 + 20 * Math.sin(angulo * 4); // Uma forma de flor/estrela
+    sinalDesenho.push({
+        re: r * Math.cos(angulo),
+        im: r * Math.sin(angulo)
+    });
+}
+
+sinalDesenho = [];
+sinalDesenho.push({ re: 10,  im: 10  });
+sinalDesenho.push({ re: 20,  im: 20  });
+sinalDesenho.push({ re: 40,  im: 30  });
+sinalDesenho.push({ re: 60,  im: 40  });
+sinalDesenho.push({ re: 40,  im: 50  });
+sinalDesenho.push({ re: 30,  im: 60 });
+sinalDesenho.push({ re: 20,  im: 70  });
+sinalDesenho.push({ re: 10,  im: 80  });
+N = sinalDesenho.length
+	
+	
+// Calcular a FFT do desenho
+const coeficientes = fft(sinalDesenho);
+
+// Transformar coeficientes em dados de círculos (Epiciclos)
+let epiciclos = coeficientes.map((c, k) => {
+    return { 
+        freq: k > N / 2 ? k - N : k, // Frequências centradas
+        amp: Math.sqrt(c.re * c.re + c.im * c.im) / N,
+        fase: Math.atan2(c.im, c.re)
+    };
+}).sort((a, b) => b.amp - a.amp); // Ordenar por tamanho do círculo
+
+// --- 3. RENDERIZAÇÃO (Canvas) ---
+
+const canvas = document.createElement('canvas');
+canvas.width = 600; canvas.height = 600;
+document.body.appendChild(canvas);
+const ctx = canvas.getContext('2d');
+
+let tempo = 0;
+let rastro = [];
+
+function animar() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(300, 300); // Centraliza no canvas
+
+    let x = 0;
+    let y = 0;
+
+    // Desenhar cada círculo (epiciclo)
+    epiciclos.forEach(c => {
+        let prevX = x;
+        let prevY = y;
+        
+        // Equação: Posição += Amplitude * cos(freq * t + fase)
+        x += c.amp * Math.cos(c.freq * tempo + c.fase);
+        y += c.amp * Math.sin(c.freq * tempo + c.fase);
+
+        // Desenhar o círculo guia
+        ctx.beginPath();
+        ctx.arc(prevX, prevY, c.amp, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.stroke();
+
+        // Desenhar o braço do círculo
+        ctx.beginPath();
+        ctx.moveTo(prevX, prevY);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = 'white';
+        ctx.stroke();
+    });
+
+    // Guardar o rastro da ponta do último círculo
+    rastro.unshift({x, y});
+    if (rastro.length > N) rastro.pop();
+
+    // Desenhar o rastro
+    ctx.beginPath();
+    ctx.strokeStyle = 'cyan';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < rastro.length - 1; i++) {
+        ctx.moveTo(rastro[i].x, rastro[i].y);
+        ctx.lineTo(rastro[i+1].x, rastro[i+1].y);
+    }
+    ctx.stroke();
+
+    ctx.restore();
+    
+    tempo += 0.1*(Math.PI * 2) / N; // Incrementa o tempo conforme o número de pontos
+    requestAnimationFrame(animar);
+}
+
+animar();
+</script>
+
+</body>
